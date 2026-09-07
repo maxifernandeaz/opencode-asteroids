@@ -29,6 +29,63 @@ const dist  = (a, b)   => Math.hypot(a.x - b.x, a.y - b.y);
 const rand  = (min, max) => min + Math.random() * (max - min);
 const randInt = (min, max) => Math.floor(rand(min, max + 1));
 
+// ── Skins ─────────────────────────────────────────────────────────────────────
+const SKINS = [
+  { id: 'classic', name: 'CLÁSICA',
+    verts: [[20, 0], [-12, -9], [-7, 0], [-12, 9]],
+    stroke: '#fff', fill: null, glow: null,
+    flame: 'rgba(255, 130, 0, 0.85)', scale: 1 },
+  { id: 'viper', name: 'VÍBORA',
+    verts: [[24, 0], [-11, -5], [-4, 0], [-11, 5]],
+    stroke: '#39ff88', fill: 'rgba(57, 255, 136, 0.18)', glow: '#39ff88',
+    flame: 'rgba(120, 255, 0, 0.85)', scale: 1 },
+  { id: 'phoenix', name: 'FÉNIX',
+    verts: [[21, 0], [-9, -15], [3, 0], [-9, 15]],
+    stroke: '#ff6b35', fill: 'rgba(255, 107, 53, 0.22)', glow: '#ff6b35',
+    flame: 'rgba(255, 60, 0, 0.85)', scale: 1 },
+  { id: 'cosmic', name: 'CÓSMICA',
+    verts: [[23, 0], [-9, -7], [0, 0], [-9, 7]],
+    stroke: '#0ff', fill: 'rgba(0, 255, 255, 0.2)', glow: '#0ff',
+    flame: 'rgba(0, 255, 255, 0.85)', scale: 1 },
+  { id: 'neon', name: 'NEÓN',
+    verts: [[21, 0], [-13, -11], [-6, 0], [-13, 11]],
+    stroke: '#ff3df0', fill: 'rgba(255, 61, 240, 0.25)', glow: '#ff3df0',
+    flame: 'rgba(255, 120, 0, 0.85)', scale: 1 },
+];
+
+let skinIndex;
+let currentSkin;
+
+function traceShip(verts, scale, skin, lineWidth = 1.5) {
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = lineWidth;
+  if (skin.glow) { ctx.shadowColor = skin.glow; ctx.shadowBlur = 8; }
+  ctx.beginPath();
+  ctx.moveTo(verts[0][0] * scale, verts[0][1] * scale);
+  for (let i = 1; i < verts.length; i++)
+    ctx.lineTo(verts[i][0] * scale, verts[i][1] * scale);
+  ctx.closePath();
+  if (skin.fill) { ctx.fillStyle = skin.fill; ctx.fill(); }
+  ctx.strokeStyle = skin.stroke;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function cycleSkin() {
+  skinIndex = (skinIndex + 1) % SKINS.length;
+  currentSkin = SKINS[skinIndex];
+  try { localStorage.setItem('asteroids-skin', currentSkin.id); } catch (e) {}
+}
+
+function loadSkin() {
+  let saved = null;
+  try { saved = localStorage.getItem('asteroids-skin'); } catch (e) {}
+  skinIndex = SKINS.findIndex(s => s.id === saved);
+  if (skinIndex < 0) skinIndex = 0;
+  currentSkin = SKINS[skinIndex];
+}
+
 // ── Bullet ────────────────────────────────────────────────────────────────────
 class Bullet {
   constructor(x, y, angle) {
@@ -243,18 +300,8 @@ class Ship {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth   = 1.5;
-    ctx.lineJoin    = 'round';
 
-    // Silueta clásica: triángulo con muesca trasera
-    ctx.beginPath();
-    ctx.moveTo( 20,  0);   // nariz
-    ctx.lineTo(-12, -9);   // ala izquierda
-    ctx.lineTo( -7,  0);   // muesca trasera
-    ctx.lineTo(-12,  9);   // ala derecha
-    ctx.closePath();
-    ctx.stroke();
+    traceShip(currentSkin.verts, currentSkin.scale, currentSkin);
 
     // Llama del propulsor
     if (this.thrusting && Math.random() > 0.35) {
@@ -262,7 +309,7 @@ class Ship {
       ctx.moveTo(-8, -4);
       ctx.lineTo(-8 - rand(6, 14), 0);
       ctx.lineTo(-8,  4);
-      ctx.strokeStyle = 'rgba(255, 130, 0, 0.85)';
+      ctx.strokeStyle = currentSkin.flame;
       ctx.stroke();
     }
 
@@ -419,6 +466,8 @@ function killShip() {
 
 // ── Update ────────────────────────────────────────────────────────────────────
 function update(dt) {
+  if (pressed('KeyC')) cycleSkin();
+
   if (state === 'gameover') {
     if (pressed('Space')) initGame();
     particles.forEach(p => p.update(dt));
@@ -526,16 +575,7 @@ function drawLifeIcon(x, y) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(-Math.PI / 2);
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth   = 1.2;
-  ctx.lineJoin    = 'round';
-  ctx.beginPath();
-  ctx.moveTo( 9,  0);
-  ctx.lineTo(-6, -5);
-  ctx.lineTo(-3,  0);
-  ctx.lineTo(-6,  5);
-  ctx.closePath();
-  ctx.stroke();
+  traceShip(currentSkin.verts, 0.45, currentSkin, 1.2);
   ctx.restore();
 }
 
@@ -551,6 +591,11 @@ function drawHUD() {
 
   for (let i = 0; i < lives; i++)
     drawLifeIcon(W - 16 - i * 22, 18);
+
+  ctx.textAlign = 'left';
+  ctx.font = '12px monospace';
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText(`SKIN: ${currentSkin.name}  [C]`, 14, H - 14);
 
   // Barra de velocidad (power-up)
   if (speedTimer > 0) {
@@ -618,4 +663,5 @@ function loop(ts) {
 }
 
 initGame();
+loadSkin();
 requestAnimationFrame(loop);
