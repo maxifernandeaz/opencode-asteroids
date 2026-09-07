@@ -232,6 +232,14 @@ class Ship {
     const NOSE = 21;
     const ox = this.x + Math.cos(this.angle) * NOSE;
     const oy = this.y + Math.sin(this.angle) * NOSE;
+    if (tripleTimer > 0) {
+      const SPREAD = 0.18;
+      return [
+        new Bullet(ox, oy, this.angle),
+        new Bullet(ox, oy, this.angle - SPREAD),
+        new Bullet(ox, oy, this.angle + SPREAD),
+      ];
+    }
     return [new Bullet(ox, oy, this.angle)];
   }
 
@@ -302,11 +310,12 @@ class Particle {
   }
 }
 
-// ── PowerUp (Velocidad) ───────────────────────────────────────────────────────
+// ── PowerUp (Velocidad / Triple shot) ─────────────────────────────────────────
 class PowerUp {
-  constructor(x, y) {
+  constructor(x, y, type = 'speed') {
     this.x = x;
     this.y = y;
+    this.type = type;
     const angle = rand(0, Math.PI * 2);
     const speed = rand(30, 70);
     this.vx = Math.cos(angle) * speed;
@@ -333,24 +342,35 @@ class PowerUp {
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot);
 
-    // Glow
-    ctx.shadowColor = '#0ff';
+    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = '#fff';
     ctx.shadowBlur = 12;
 
-    // Rayo/relámpago
-    ctx.fillStyle = '#0ff';
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(-2, -10);
-    ctx.lineTo( 4, -3);
-    ctx.lineTo( 0, -2);
-    ctx.lineTo( 3,  10);
-    ctx.lineTo(-3,  1);
-    ctx.lineTo( 1,  0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    if (this.type === 'triple') {
+      // Tres balas alineadas
+      ctx.shadowColor = '#ffa500';
+      ctx.fillStyle = '#ffa500';
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.arc(i * 7, 0, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    } else {
+      // Rayo/relámpago (velocidad)
+      ctx.shadowColor = '#0ff';
+      ctx.fillStyle = '#0ff';
+      ctx.beginPath();
+      ctx.moveTo(-2, -10);
+      ctx.lineTo( 4, -3);
+      ctx.lineTo( 0, -2);
+      ctx.lineTo( 3,  10);
+      ctx.lineTo(-3,  1);
+      ctx.lineTo( 1,  0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
 
     ctx.shadowBlur = 0;
     ctx.restore();
@@ -359,7 +379,7 @@ class PowerUp {
 
 // ── Estado del juego ──────────────────────────────────────────────────────────
 let ship, bullets, asteroids, particles, powerups, shootingStars;
-let score, lives, level, speedTimer;
+let score, lives, level, speedTimer, tripleTimer;
 let state;      // 'playing' | 'dead' | 'gameover'
 let deadTimer;
 
@@ -386,6 +406,7 @@ function initGame() {
   lives  = 3;
   level  = 1;
   speedTimer = 0;
+  tripleTimer = 0;
   state  = 'playing';
   spawnAsteroids(4);
 }
@@ -397,6 +418,7 @@ function nextLevel() {
   powerups  = [];
   shootingStars = [];
   speedTimer = 0;
+  tripleTimer = 0;
   ship.reset();
   spawnAsteroids(3 + level);
 }
@@ -470,8 +492,8 @@ function update(dt) {
         score += POINTS[a.size];
         explode(a.x, a.y, a.size * 5);
         newAsteroids.push(...a.split());
-        // 15% de probabilidad de soltar un power-up de velocidad
-        if (Math.random() < 0.15) powerups.push(new PowerUp(a.x, a.y));
+        // 15% de probabilidad de soltar un power-up (velocidad o triple)
+        if (Math.random() < 0.15) powerups.push(new PowerUp(a.x, a.y, Math.random() < 0.5 ? 'triple' : 'speed'));
       }
     }
     // Bala vs estrella fugaz
@@ -510,11 +532,17 @@ function update(dt) {
     for (const p of powerups) {
       if (!p.dead && dist(ship, p) < ship.radius + p.radius) {
         p.dead = true;
-        speedTimer = 5;
+        if (p.type === 'triple') {
+          tripleTimer = 5;
+        } else {
+          speedTimer = 5;
+        }
         explode(ship.x, ship.y, 6);
       }
     }
   }
+
+  if (tripleTimer > 0) tripleTimer -= dt;
   powerups = powerups.filter(p => !p.dead);
 
   // Nivel completado
@@ -552,30 +580,38 @@ function drawHUD() {
   for (let i = 0; i < lives; i++)
     drawLifeIcon(W - 16 - i * 22, 18);
 
-  // Barra de velocidad (power-up)
-  if (speedTimer > 0) {
+  // Barra de power-up (velocidad o triple)
+  const drawPowerBar = (label, frac, color, rgba, y) => {
     const WIDTH = 150;
-    const x = 14, y = 38;
-    const frac = Math.max(0, speedTimer / 5);
+    const x = 14;
 
     ctx.save();
-    ctx.shadowColor = '#0ff';
+    ctx.shadowColor = color;
     ctx.shadowBlur  = 8;
 
     ctx.textAlign = 'left';
     ctx.font = '13px monospace';
-    ctx.fillStyle = '#0ff';
-    ctx.fillText('VELOCIDAD', x, y + 12);
+    ctx.fillStyle = color;
+    ctx.fillText(label, x, y + 12);
 
-    ctx.strokeStyle = 'rgba(0,255,255,0.5)';
+    ctx.strokeStyle = rgba;
     ctx.lineWidth   = 1;
     ctx.strokeRect(x, y + 18, WIDTH, 6);
 
-    ctx.fillStyle = '#0ff';
+    ctx.fillStyle = color;
     ctx.fillRect(x, y + 18, WIDTH * frac, 6);
 
     ctx.shadowBlur = 0;
     ctx.restore();
+  };
+
+  let barY = 38;
+  if (speedTimer > 0) {
+    drawPowerBar('VELOCIDAD', Math.max(0, speedTimer / 5), '#0ff', 'rgba(0,255,255,0.5)', barY);
+    barY += 28;
+  }
+  if (tripleTimer > 0) {
+    drawPowerBar('TRIPLE SHOT', Math.max(0, tripleTimer / 5), '#ffa500', 'rgba(255,165,0,0.5)', barY);
   }
 }
 
