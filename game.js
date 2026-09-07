@@ -289,6 +289,14 @@ class Ship {
     const NOSE = 21;
     const ox = this.x + Math.cos(this.angle) * NOSE;
     const oy = this.y + Math.sin(this.angle) * NOSE;
+    if (tripleTimer > 0) {
+      const SPREAD = 0.18;
+      return [
+        new Bullet(ox, oy, this.angle),
+        new Bullet(ox, oy, this.angle - SPREAD),
+        new Bullet(ox, oy, this.angle + SPREAD),
+      ];
+    }
     return [new Bullet(ox, oy, this.angle)];
   }
 
@@ -369,7 +377,7 @@ class Particle {
   }
 }
 
-// ── PowerUp (Velocidad / Escudo) ──────────────────────────────────────────────
+// ── PowerUp (Velocidad / Escudo / Triple shot) ────────────────────────────────
 class PowerUp {
   constructor(x, y, type = 'speed') {
     this.x = x;
@@ -383,7 +391,6 @@ class PowerUp {
     this.ttl = 8;
     this.dead = false;
     this.rot = 0;
-    this.color = type === 'shield' ? '#2f0' : '#0ff';
   }
 
   update(dt) {
@@ -402,16 +409,15 @@ class PowerUp {
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot);
 
-    // Glow
-    ctx.shadowColor = this.color;
+ctx.lineWidth = 1.2;
+    ctx.strokeStyle = '#fff';
     ctx.shadowBlur = 12;
 
-    // Icono: rayo (velocidad) o escudo
-    ctx.fillStyle = this.color;
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
     if (this.type === 'shield') {
+      // Escudo
+      ctx.shadowColor = '#0f0';
+      ctx.fillStyle = '#0f0';
+      ctx.beginPath();
       ctx.moveTo(0,  10);
       ctx.lineTo( 9,  5);
       ctx.lineTo( 9, -1);
@@ -419,7 +425,23 @@ class PowerUp {
       ctx.lineTo(-9, -1);
       ctx.lineTo(-9,  5);
       ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (this.type === 'triple') {
+      // Tres balas alineadas
+      ctx.shadowColor = '#ffa500';
+      ctx.fillStyle = '#ffa500';
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.arc(i * 7, 0, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
     } else {
+      // Rayo/relámpago (velocidad)
+      ctx.shadowColor = '#0ff';
+      ctx.fillStyle = '#0ff';
+      ctx.beginPath();
       ctx.moveTo(-2, -10);
       ctx.lineTo( 4, -3);
       ctx.lineTo( 0, -2);
@@ -427,9 +449,9 @@ class PowerUp {
       ctx.lineTo(-3,  1);
       ctx.lineTo( 1,  0);
       ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
     }
-    ctx.fill();
-    ctx.stroke();
 
     ctx.shadowBlur = 0;
     ctx.restore();
@@ -438,7 +460,7 @@ class PowerUp {
 
 // ── Estado del juego ──────────────────────────────────────────────────────────
 let ship, bullets, asteroids, particles, powerups, shootingStars;
-let score, lives, level, speedTimer, shieldTimer;
+let score, lives, level, speedTimer, shieldTimer, tripleTimer;
 let state;      // 'playing' | 'dead' | 'gameover'
 let deadTimer;
 
@@ -466,6 +488,7 @@ function initGame() {
   level  = 1;
   speedTimer = 0;
   shieldTimer = 0;
+  tripleTimer = 0;
   state  = 'playing';
   spawnAsteroids(4);
 }
@@ -478,6 +501,7 @@ function nextLevel() {
   shootingStars = [];
   speedTimer = 0;
   shieldTimer = 0;
+  tripleTimer = 0;
   ship.reset();
   spawnAsteroids(3 + level);
 }
@@ -535,6 +559,7 @@ function update(dt) {
   shootingStars.forEach(s => s.update(dt));
   if (speedTimer  > 0) speedTimer  -= dt;
   if (shieldTimer > 0) shieldTimer -= dt;
+  if (tripleTimer > 0) tripleTimer -= dt;
 
   // Spawn espontáneo de estrellas fugaces
   if (Math.random() < 0.003) shootingStars.push(new ShootingStar());
@@ -554,10 +579,11 @@ function update(dt) {
         score += POINTS[a.size];
         explode(a.x, a.y, a.size * 5);
         newAsteroids.push(...a.split());
-        // 15% velocidad, 6% escudo
+        // 7% velocidad, 7% escudo, 7% triple
         const roll = Math.random();
         if (roll < 0.21) {
-          const type = roll < 0.06 ? 'shield' : 'speed';
+          const type = roll < 0.07 ? 'shield' :
+                       roll < 0.14 ? 'triple' : 'speed';
           powerups.push(new PowerUp(a.x, a.y, type));
         }
       }
@@ -611,8 +637,9 @@ function update(dt) {
     for (const p of powerups) {
       if (!p.dead && dist(ship, p) < ship.radius + p.radius) {
         p.dead = true;
-        if (p.type === 'shield') shieldTimer = 6;
-        else                     speedTimer = 5;
+        if (p.type === 'shield')        shieldTimer = 6;
+        else if (p.type === 'triple')   tripleTimer = 5;
+        else                            speedTimer = 5;
         explode(ship.x, ship.y, 6);
       }
     }
@@ -652,56 +679,42 @@ function drawHUD() {
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.fillText(`SKIN: ${currentSkin.name}  [C]`, 14, H - 14);
 
-  // Barra de velocidad (power-up)
+  // Barras de power-ups
+  const drawPowerBar = (label, frac, color, rgba, y) => {
+    const WIDTH = 150;
+    const x = 14;
+
+    ctx.save();
+    ctx.shadowColor = color;
+    ctx.shadowBlur  = 8;
+
+    ctx.textAlign = 'left';
+    ctx.font = '13px monospace';
+    ctx.fillStyle = color;
+    ctx.fillText(label, x, y + 12);
+
+    ctx.strokeStyle = rgba;
+    ctx.lineWidth   = 1;
+    ctx.strokeRect(x, y + 18, WIDTH, 6);
+
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y + 18, WIDTH * frac, 6);
+
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  };
+
+  let barY = 38;
   if (speedTimer > 0) {
-    const WIDTH = 150;
-    const x = 14, y = 38;
-    const frac = Math.max(0, speedTimer / 5);
-
-    ctx.save();
-    ctx.shadowColor = '#0ff';
-    ctx.shadowBlur  = 8;
-
-    ctx.textAlign = 'left';
-    ctx.font = '13px monospace';
-    ctx.fillStyle = '#0ff';
-    ctx.fillText('VELOCIDAD', x, y + 12);
-
-    ctx.strokeStyle = 'rgba(0,255,255,0.5)';
-    ctx.lineWidth   = 1;
-    ctx.strokeRect(x, y + 18, WIDTH, 6);
-
-    ctx.fillStyle = '#0ff';
-    ctx.fillRect(x, y + 18, WIDTH * frac, 6);
-
-    ctx.shadowBlur = 0;
-    ctx.restore();
+    drawPowerBar('VELOCIDAD', Math.max(0, speedTimer / 5), '#0ff', 'rgba(0,255,255,0.5)', barY);
+    barY += 28;
   }
-
-  // Barra de escudo (power-up)
   if (shieldTimer > 0) {
-    const WIDTH = 150;
-    const x = 14, y = 64;
-    const frac = Math.max(0, shieldTimer / 6);
-
-    ctx.save();
-    ctx.shadowColor = '#0f0';
-    ctx.shadowBlur  = 8;
-
-    ctx.textAlign = 'left';
-    ctx.font = '13px monospace';
-    ctx.fillStyle = '#0f0';
-    ctx.fillText('ESCUDO', x, y + 12);
-
-    ctx.strokeStyle = 'rgba(0,255,0,0.5)';
-    ctx.lineWidth   = 1;
-    ctx.strokeRect(x, y + 18, WIDTH, 6);
-
-    ctx.fillStyle = '#0f0';
-    ctx.fillRect(x, y + 18, WIDTH * frac, 6);
-
-    ctx.shadowBlur = 0;
-    ctx.restore();
+    drawPowerBar('ESCUDO', Math.max(0, shieldTimer / 6), '#0f0', 'rgba(0,255,0,0.5)', barY);
+    barY += 28;
+  }
+  if (tripleTimer > 0) {
+    drawPowerBar('TRIPLE SHOT', Math.max(0, tripleTimer / 5), '#ffa500', 'rgba(255,165,0,0.5)', barY);
   }
 }
 
