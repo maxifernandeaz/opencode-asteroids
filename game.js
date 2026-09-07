@@ -237,6 +237,26 @@ class Ship {
 
   draw() {
     if (this.dead) return;
+
+    // Burbuja del escudo
+    if (shieldTimer > 0) {
+      const alpha = 0.35 + 0.2 * Math.sin(performance.now() / 130);
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.strokeStyle = '#0f0';
+      ctx.globalAlpha = Math.max(0.15, alpha);
+      ctx.lineWidth   = 2;
+      ctx.shadowColor = '#0f0';
+      ctx.shadowBlur  = 14;
+      ctx.beginPath();
+      ctx.arc(0, 0, 22, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = Math.max(0.05, alpha * 0.3);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
     // Parpadeo durante invencibilidad de reaparición
     if (this.invincible > 0 && Math.floor(this.invincible * 8) % 2 === 0) return;
 
@@ -302,11 +322,12 @@ class Particle {
   }
 }
 
-// ── PowerUp (Velocidad) ───────────────────────────────────────────────────────
+// ── PowerUp (Velocidad / Escudo) ──────────────────────────────────────────────
 class PowerUp {
-  constructor(x, y) {
+  constructor(x, y, type = 'speed') {
     this.x = x;
     this.y = y;
+    this.type = type;
     const angle = rand(0, Math.PI * 2);
     const speed = rand(30, 70);
     this.vx = Math.cos(angle) * speed;
@@ -315,6 +336,7 @@ class PowerUp {
     this.ttl = 8;
     this.dead = false;
     this.rot = 0;
+    this.color = type === 'shield' ? '#2f0' : '#0ff';
   }
 
   update(dt) {
@@ -334,21 +356,31 @@ class PowerUp {
     ctx.rotate(this.rot);
 
     // Glow
-    ctx.shadowColor = '#0ff';
+    ctx.shadowColor = this.color;
     ctx.shadowBlur = 12;
 
-    // Rayo/relámpago
-    ctx.fillStyle = '#0ff';
+    // Icono: rayo (velocidad) o escudo
+    ctx.fillStyle = this.color;
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.moveTo(-2, -10);
-    ctx.lineTo( 4, -3);
-    ctx.lineTo( 0, -2);
-    ctx.lineTo( 3,  10);
-    ctx.lineTo(-3,  1);
-    ctx.lineTo( 1,  0);
-    ctx.closePath();
+    if (this.type === 'shield') {
+      ctx.moveTo(0,  10);
+      ctx.lineTo( 9,  5);
+      ctx.lineTo( 9, -1);
+      ctx.quadraticCurveTo(0, -10, -6, -3);
+      ctx.lineTo(-9, -1);
+      ctx.lineTo(-9,  5);
+      ctx.closePath();
+    } else {
+      ctx.moveTo(-2, -10);
+      ctx.lineTo( 4, -3);
+      ctx.lineTo( 0, -2);
+      ctx.lineTo( 3,  10);
+      ctx.lineTo(-3,  1);
+      ctx.lineTo( 1,  0);
+      ctx.closePath();
+    }
     ctx.fill();
     ctx.stroke();
 
@@ -359,7 +391,7 @@ class PowerUp {
 
 // ── Estado del juego ──────────────────────────────────────────────────────────
 let ship, bullets, asteroids, particles, powerups, shootingStars;
-let score, lives, level, speedTimer;
+let score, lives, level, speedTimer, shieldTimer;
 let state;      // 'playing' | 'dead' | 'gameover'
 let deadTimer;
 
@@ -386,6 +418,7 @@ function initGame() {
   lives  = 3;
   level  = 1;
   speedTimer = 0;
+  shieldTimer = 0;
   state  = 'playing';
   spawnAsteroids(4);
 }
@@ -397,6 +430,7 @@ function nextLevel() {
   powerups  = [];
   shootingStars = [];
   speedTimer = 0;
+  shieldTimer = 0;
   ship.reset();
   spawnAsteroids(3 + level);
 }
@@ -450,7 +484,8 @@ function update(dt) {
   particles.forEach(p => p.update(dt));
   powerups.forEach(p => p.update(dt));
   shootingStars.forEach(s => s.update(dt));
-  if (speedTimer > 0) speedTimer -= dt;
+  if (speedTimer  > 0) speedTimer  -= dt;
+  if (shieldTimer > 0) shieldTimer -= dt;
 
   // Spawn espontáneo de estrellas fugaces
   if (Math.random() < 0.003) shootingStars.push(new ShootingStar());
@@ -470,8 +505,12 @@ function update(dt) {
         score += POINTS[a.size];
         explode(a.x, a.y, a.size * 5);
         newAsteroids.push(...a.split());
-        // 15% de probabilidad de soltar un power-up de velocidad
-        if (Math.random() < 0.15) powerups.push(new PowerUp(a.x, a.y));
+        // 15% velocidad, 6% escudo
+        const roll = Math.random();
+        if (roll < 0.21) {
+          const type = roll < 0.06 ? 'shield' : 'speed';
+          powerups.push(new PowerUp(a.x, a.y, type));
+        }
       }
     }
     // Bala vs estrella fugaz
@@ -492,14 +531,27 @@ function update(dt) {
   if (ship.invincible <= 0) {
     for (const a of asteroids) {
       if (dist(ship, a) < ship.radius + a.radius * 0.82) {
-        killShip();
+        if (shieldTimer > 0) {
+          a.dead = true;
+          score += POINTS[a.size];
+          explode(a.x, a.y, a.size * 5 + 4);
+          asteroids.push(...a.split());
+        } else {
+          killShip();
+        }
         break;
       }
     }
     // Nave vs estrella fugaz
     for (const s of shootingStars) {
       if (!s.dead && dist(ship, s) < ship.radius + s.radius) {
-        killShip();
+        if (shieldTimer > 0) {
+          s.dead = true;
+          score += 200;
+          explode(s.x, s.y, 10);
+        } else {
+          killShip();
+        }
         break;
       }
     }
@@ -510,12 +562,15 @@ function update(dt) {
     for (const p of powerups) {
       if (!p.dead && dist(ship, p) < ship.radius + p.radius) {
         p.dead = true;
-        speedTimer = 5;
+        if (p.type === 'shield') shieldTimer = 6;
+        else                     speedTimer = 5;
         explode(ship.x, ship.y, 6);
       }
     }
   }
-  powerups = powerups.filter(p => !p.dead);
+  asteroids      = asteroids.filter(a => !a.dead);
+  shootingStars  = shootingStars.filter(s => !s.dead);
+  powerups       = powerups.filter(p => !p.dead);
 
   // Nivel completado
   if (asteroids.length === 0) nextLevel();
@@ -572,6 +627,32 @@ function drawHUD() {
     ctx.strokeRect(x, y + 18, WIDTH, 6);
 
     ctx.fillStyle = '#0ff';
+    ctx.fillRect(x, y + 18, WIDTH * frac, 6);
+
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  // Barra de escudo (power-up)
+  if (shieldTimer > 0) {
+    const WIDTH = 150;
+    const x = 14, y = 64;
+    const frac = Math.max(0, shieldTimer / 6);
+
+    ctx.save();
+    ctx.shadowColor = '#0f0';
+    ctx.shadowBlur  = 8;
+
+    ctx.textAlign = 'left';
+    ctx.font = '13px monospace';
+    ctx.fillStyle = '#0f0';
+    ctx.fillText('ESCUDO', x, y + 12);
+
+    ctx.strokeStyle = 'rgba(0,255,0,0.5)';
+    ctx.lineWidth   = 1;
+    ctx.strokeRect(x, y + 18, WIDTH, 6);
+
+    ctx.fillStyle = '#0f0';
     ctx.fillRect(x, y + 18, WIDTH * frac, 6);
 
     ctx.shadowBlur = 0;
