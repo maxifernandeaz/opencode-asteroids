@@ -1,0 +1,27 @@
+name: "✨ Feature request"
+description: Sugerir una nueva funcionalidad
+title: "[Feature] Breve descripción"
+labels: [feature]
+body:
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: "Descripción"
+      description: "Qué funcionalidad quieres agregar."
+      placeholder: "Describe la funcionalidad..."
+    validations:
+      required: true
+  - type: textarea
+    id: motivacion
+    attributes:
+      label: "Motivación"
+      description: "Por qué es útil o qué problema resuelve."
+      placeholder: "Explica el caso de uso..."
+    validations:
+      required: true
+  - type: textarea
+    id: detalle
+    attributes:
+      label: "Detalles / ideas de implementación"
+      description: "Opcional: cómo podría implementarse (archivos, mecánicas, etc.)."
+      placeholder: "..."

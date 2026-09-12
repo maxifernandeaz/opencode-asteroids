@@ -1,0 +1,53 @@
+name: Issue Triage
+
+"on":
+  issues:
+    types: [opened]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Run OpenCode triage
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: opencode/big-pickle
+          prompt: |
+            Eres el bot de triaje de este repositorio. Atiende únicamente el issue recién creado.
+
+            Reglas obligatorias:
+            1. NO modifiques el título ni el cuerpo del issue. El texto del autor se conserva tal cual.
+            2. Clasifica el issue en UNA sola etiqueta: "bug", "feature" o "question".
+               - Si la etiqueta no existe, créala primero con la API de GitHub (siempre en minúsculas).
+               - Aplícala al issue usando la GitHub API. Usa el token de instalación de la OpenCode GitHub App que la acción ya provee en tu entorno; NO uses ningún secret ni token externo.
+               - Si el issue ya tiene la etiqueta correcta, no la dupliques.
+            3. NO crees ramas, commits ni PRs. NO edites código.
+            4. Revisa si la funcionalidad o el error ya fue reportado en otro issue abierto; si es un duplicado, mencionalo en el comentario con referencia al/los issue(s).
+            5. Responde con un comentario en español con este formato exacto:
+
+               ## Resumen generado por opencode
+               Resumen conciso del issue en español (qué se reporta y por qué importa).
+
+               ## Contexto relevante para la revisión
+               Información útil para quien vaya a atenderlo:
+               - Archivos implicados con referencias archivo:línea (ej. game.js:150).
+               - Componentes afectados (Ship, Asteroid, Bullet, partículas, input, etc.).
+               - Señales de reproducción extraíbles del texto.
+               - Cualquier otra cosa que el revisor deba saber antes de empezar.
+               - Si aplica, issue(s) duplicados encontrados.
+
+               ---
+
+               _El contenido original del issue se conserva intacto._

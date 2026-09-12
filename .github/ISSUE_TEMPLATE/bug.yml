@@ -1,0 +1,48 @@
+name: "🐞 Bug report"
+description: Reportar un error o comportamiento inesperado
+title: "[Bug] Breve descripción del problema"
+labels: [bug]
+body:
+  - type: textarea
+    id: observado
+    attributes:
+      label: "Comportamiento observado"
+      description: "Qué pasó realmente."
+      placeholder: "Describe qué viste..."
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: "Comportamiento esperado"
+      description: "Qué debería haber pasado."
+      placeholder: "Describe qué esperabas..."
+    validations:
+      required: true
+  - type: textarea
+    id: reproducir
+    attributes:
+      label: "Cómo reproducirlo"
+      description: "Pasos exactos para reproducir el error."
+      placeholder: |-
+        1. Abrir el juego...
+        2. Pulsar...
+        3. Ver el error
+  - type: dropdown
+    id: navegador
+    attributes:
+      label: "Navegador"
+      multiple: true
+      options:
+        - Chrome
+        - Firefox
+        - Safari
+        - Edge
+        - Otro
+  - type: checkboxes
+    id: validacion
+    attributes:
+      label: "Checklist antes de enviar"
+      options:
+        - label: "Proporcioné pasos de reproducción"
+        - label: "Indiqué el navegador"

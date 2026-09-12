@@ -1,0 +1,12 @@
+name: "❓ Pregunta"
+description: Hacer una pregunta sobre el proyecto o el código
+title: "[Pregunta] Tu pregunta"
+labels: [question]
+body:
+  - type: textarea
+    id: pregunta
+    attributes:
+      label: "Tu pregunta"
+      placeholder: "Escribe tu pregunta..."
+    validations:
+      required: true
