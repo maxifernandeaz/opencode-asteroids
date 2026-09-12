@@ -29,6 +29,8 @@ const dist  = (a, b)   => Math.hypot(a.x - b.x, a.y - b.y);
 const rand  = (min, max) => min + Math.random() * (max - min);
 const randInt = (min, max) => Math.floor(rand(min, max + 1));
 
+const addScore = (points) => { score += points * (currentSkin.scoreMul || 1); };
+
 // ── Skins ─────────────────────────────────────────────────────────────────────
 const SKINS = [
   { id: 'classic', name: 'CLÁSICA',
@@ -51,6 +53,10 @@ const SKINS = [
     verts: [[21, 0], [-13, -11], [-6, 0], [-13, 11]],
     stroke: '#ff3df0', fill: 'rgba(255, 61, 240, 0.25)', glow: '#ff3df0',
     flame: 'rgba(255, 120, 0, 0.85)', scale: 1 },
+  { id: 'morada', name: 'MORADA',
+    verts: [[22, 0], [-12, -10], [-6, 0], [-12, 10]],
+    stroke: '#a970ff', fill: 'rgba(169, 112, 255, 0.25)', glow: '#a970ff',
+    flame: 'rgba(200, 120, 255, 0.85)', scale: 2, scoreMul: 2 },
 ];
 
 let skinIndex;
@@ -260,6 +266,7 @@ class Ship {
 
   update(dt) {
     if (this.dead) return;
+    this.radius = 12 * (currentSkin.scale || 1);
     if (this.invincible    > 0) this.invincible    -= dt;
     if (this.shootCooldown > 0) this.shootCooldown -= dt;
 
@@ -286,7 +293,7 @@ class Ship {
   tryShoot() {
     if (this.shootCooldown > 0 || this.dead) return [];
     this.shootCooldown = 0.2;
-    const NOSE = 21;
+    const NOSE = 21 * (currentSkin.scale || 1);
     const ox = this.x + Math.cos(this.angle) * NOSE;
     const oy = this.y + Math.sin(this.angle) * NOSE;
     if (tripleTimer > 0) {
@@ -314,7 +321,7 @@ class Ship {
       ctx.shadowColor = '#0f0';
       ctx.shadowBlur  = 14;
       ctx.beginPath();
-      ctx.arc(0, 0, 22, 0, Math.PI * 2);
+      ctx.arc(0, 0, 22 * (currentSkin.scale || 1), 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = Math.max(0.05, alpha * 0.3);
       ctx.fill();
@@ -333,10 +340,11 @@ class Ship {
 
     // Llama del propulsor
     if (this.thrusting && Math.random() > 0.35) {
+      const s = currentSkin.scale || 1;
       ctx.beginPath();
-      ctx.moveTo(-8, -4);
-      ctx.lineTo(-8 - rand(6, 14), 0);
-      ctx.lineTo(-8,  4);
+      ctx.moveTo(-8 * s, -4 * s);
+      ctx.lineTo(-8 * s - rand(6, 14) * s, 0);
+      ctx.lineTo(-8 * s,  4 * s);
       ctx.strokeStyle = currentSkin.flame;
       ctx.stroke();
     }
@@ -576,7 +584,7 @@ function update(dt) {
       if (!a.dead && !b.dead && dist(b, a) < a.radius) {
         b.dead = true;
         a.dead = true;
-        score += POINTS[a.size];
+        addScore(POINTS[a.size]);
         explode(a.x, a.y, a.size * 5);
         newAsteroids.push(...a.split());
         // 7% velocidad, 7% escudo, 7% triple
@@ -593,7 +601,7 @@ function update(dt) {
       if (!s.dead && !b.dead && dist(b, s) < s.radius) {
         b.dead = true;
         s.dead = true;
-        score += 200;
+        addScore(200);
         explode(s.x, s.y, 10);
       }
     }
@@ -608,7 +616,7 @@ function update(dt) {
       if (dist(ship, a) < ship.radius + a.radius * 0.82) {
         if (shieldTimer > 0) {
           a.dead = true;
-          score += POINTS[a.size];
+          addScore(POINTS[a.size]);
           explode(a.x, a.y, a.size * 5 + 4);
           asteroids.push(...a.split());
         } else {
@@ -622,7 +630,7 @@ function update(dt) {
       if (!s.dead && dist(ship, s) < ship.radius + s.radius) {
         if (shieldTimer > 0) {
           s.dead = true;
-          score += 200;
+          addScore(200);
           explode(s.x, s.y, 10);
         } else {
           killShip();
